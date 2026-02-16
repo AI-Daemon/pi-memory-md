@@ -82,6 +82,12 @@ function getCoreMemoryDir(settings: MemoryMdSettings, ctx: ExtensionContext): st
     return path.join(getMemoryDir(settings, ctx), "core");
 }
 
+function getRepoName(settings: MemoryMdSettings): string {
+    if (!settings.repoUrl) return "memory-md";
+    const match = settings.repoUrl.match(/\/([^\/]+?)(\.git)?$/);
+    return match ? match[1] : "memory-md";
+}
+
 function loadSettings(): MemoryMdSettings {
     const DEFAULT_SETTINGS: MemoryMdSettings = {
         enabled: true,
@@ -111,7 +117,7 @@ function loadSettings(): MemoryMdSettings {
 
         return loadedSettings;
     } catch (error) {
-        console.warn("Failed to load memory-md settings:", error);
+        console.warn("Failed to load memory settings:", error);
         return DEFAULT_SETTINGS;
     }
 }
@@ -157,9 +163,10 @@ export async function syncRepository(
 
         isRepoInitialized.value = true;
         const updated = pullResult.stdout.includes("Updating") || pullResult.stdout.includes("Fast-forward");
+        const repoName = getRepoName(settings);
         return {
             success: true,
-            message: updated ? "Pulled latest changes from memory-md repository" : "Memory-md repository is already latest",
+            message: updated ? `Pulled latest changes from [${repoName}]` : `[${repoName}] is already latest`,
             updated,
         };
     }
@@ -172,7 +179,8 @@ export async function syncRepository(
 
     if (cloneResult.success) {
         isRepoInitialized.value = true;
-        return { success: true, message: "Cloned memory-md repository successfully", updated: true };
+        const repoName = getRepoName(settings);
+        return { success: true, message: `Cloned [${repoName}] successfully`, updated: true };
     }
 
     return { success: false, message: "Clone failed - check repo URL and auth" };
@@ -332,7 +340,7 @@ function buildMemoryContext(settings: MemoryMdSettings, ctx: ExtensionContext): 
  * Main extension initialization.
  *
  * Lifecycle:
- * 1. session_start: Start async sync (non-blocking), create core directory, build memory context
+ * 1. session_start: Start async sync (non-blocking), build memory context
  * 2. before_agent_start: Wait for sync, then inject memory on first agent turn
  * 3. Register tools and commands for memory operations
  *
@@ -375,9 +383,6 @@ export default function memoryMdExtension(pi: ExtensionAPI) {
                 return syncResult;
             });
         }
-
-        const coreDir = getCoreMemoryDir(settings, ctx);
-        fs.mkdirSync(coreDir, { recursive: true });
 
         cachedMemoryContext = buildMemoryContext(settings, ctx);
         memoryInjected = false;
@@ -442,6 +447,9 @@ export default function memoryMdExtension(pi: ExtensionAPI) {
     pi.registerCommand("memory-init", {
         description: "Initialize memory repository",
         handler: async (_args, ctx) => {
+            const memoryDir = getMemoryDir(settings, ctx);
+            const alreadyInitialized = fs.existsSync(path.join(memoryDir, "core", "user"));
+
             const result = await syncRepository(pi, settings, repoInitialized);
 
             if (!result.success) {
@@ -449,15 +457,17 @@ export default function memoryMdExtension(pi: ExtensionAPI) {
                 return;
             }
 
-            const memoryDir = getMemoryDir(settings, ctx);
-
             ensureDirectoryStructure(memoryDir);
             createDefaultFiles(memoryDir);
 
-            ctx.ui.notify(
-                `Memory initialized: ${result.message}\n\nCreated:\n  - core/user\n  - core/project\n  - reference`,
-                "info",
-            );
+            if (alreadyInitialized) {
+                ctx.ui.notify(`Memory already exists: ${result.message}`, "info");
+            } else {
+                ctx.ui.notify(
+                    `Memory initialized: ${result.message}\n\nCreated:\n  - core/user\n  - core/project\n  - reference`,
+                    "info",
+                );
+            }
         },
     });
 
