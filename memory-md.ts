@@ -68,18 +68,9 @@ function expandPath(p: string): string {
     return p;
 }
 
-function getProjectName(ctx: ExtensionContext): string {
-    return path.basename(ctx.cwd);
-}
-
 export function getMemoryDir(settings: MemoryMdSettings, ctx: ExtensionContext): string {
-    const projectName = getProjectName(ctx);
     const basePath = settings.localPath || DEFAULT_LOCAL_PATH;
-    return path.join(basePath, projectName);
-}
-
-function getCoreMemoryDir(settings: MemoryMdSettings, ctx: ExtensionContext): string {
-    return path.join(getMemoryDir(settings, ctx), "core");
+    return path.join(basePath, path.basename(ctx.cwd));
 }
 
 function getRepoName(settings: MemoryMdSettings): string {
@@ -306,7 +297,7 @@ function createDefaultFiles(memoryDir: string): void {
 }
 
 function buildMemoryContext(settings: MemoryMdSettings, ctx: ExtensionContext): string {
-    const coreDir = getCoreMemoryDir(settings, ctx);
+    const coreDir = path.join(getMemoryDir(settings, ctx), "core");
 
     if (!fs.existsSync(coreDir)) {
         return "";
@@ -375,6 +366,14 @@ export default function memoryMdExtension(pi: ExtensionAPI) {
             return;
         }
 
+        const memoryDir = getMemoryDir(settings, ctx);
+        const coreDir = path.join(memoryDir, "core");
+
+        if (!fs.existsSync(coreDir)) {
+            ctx.ui.notify("Memory-md not initialized. Use /memory-init to set up project memory.", "info");
+            return;
+        }
+
         if (settings.autoSync?.onSessionStart && settings.localPath) {
             syncPromise = syncRepository(pi, settings, repoInitialized).then((syncResult) => {
                 if (settings.repoUrl) {
@@ -431,7 +430,7 @@ export default function memoryMdExtension(pi: ExtensionAPI) {
     pi.registerCommand("memory-status", {
         description: "Show memory repository status",
         handler: async (_args, ctx) => {
-            const projectName = getProjectName(ctx);
+            const projectName = path.basename(ctx.cwd);
             const memoryDir = getMemoryDir(settings, ctx);
             const result = await gitExec(pi, settings.localPath!, "status", "--porcelain");
 
