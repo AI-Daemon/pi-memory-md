@@ -432,8 +432,17 @@ export default function memoryMdExtension(pi: ExtensionAPI) {
         handler: async (_args, ctx) => {
             const projectName = path.basename(ctx.cwd);
             const memoryDir = getMemoryDir(settings, ctx);
-            const result = await gitExec(pi, settings.localPath!, "status", "--porcelain");
+            const coreUserDir = path.join(memoryDir, "core", "user");
 
+            if (!fs.existsSync(coreUserDir)) {
+                ctx.ui.notify(
+                    `Memory: ${projectName} | Not initialized | Use /memory-init to set up`,
+                    "info",
+                );
+                return;
+            }
+
+            const result = await gitExec(pi, settings.localPath!, "status", "--porcelain");
             const isDirty = result.stdout.trim().length > 0;
 
             ctx.ui.notify(

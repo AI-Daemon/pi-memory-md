@@ -1,4 +1,5 @@
 import path from "node:path";
+import fs from "node:fs";
 import type { ExtensionAPI, ExtensionContext, theme} from "@mariozechner/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
 import { Text } from "@mariozechner/pi-tui";
@@ -37,14 +38,24 @@ export function registerMemorySync(
         async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
             const { action } = params as { action: "pull" | "push" | "status" };
             const localPath = settings.localPath!;
+            const memoryDir = getMemoryDir(settings, ctx);
+            const coreUserDir = path.join(memoryDir, "core", "user");
 
             if (action === "status") {
+                const initialized = isRepoInitialized.value && fs.existsSync(coreUserDir);
+                if (!initialized) {
+                    return {
+                        content: [{ type: "text", text: "Memory repository not initialized. Use memory_init to set up." }],
+                        details: { initialized: false },
+                    };
+                }
+
                 const result = await gitExec(pi, localPath, "status", "--porcelain");
                 const dirty = result.stdout.trim().length > 0;
 
                 return {
                     content: [{ type: "text", text: dirty ? `Changes detected:\n${result.stdout}` : "No uncommitted changes" }],
-                    details: { dirty },
+                    details: { initialized: true, dirty },
                 };
             }
 
