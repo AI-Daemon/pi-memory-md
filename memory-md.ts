@@ -360,7 +360,7 @@ export default function memoryMdExtension(pi: ExtensionAPI) {
   let cachedMemoryContext: string | null = null;
   let memoryInjected = false;
 
-  pi.on("session_start", async (_event, ctx) => {
+  async function initSession(ctx: ExtensionContext, isFirstSession: boolean) {
     settings = loadSettings();
 
     if (!settings.enabled) {
@@ -371,7 +371,9 @@ export default function memoryMdExtension(pi: ExtensionAPI) {
     const coreDir = path.join(memoryDir, "core");
 
     if (!fs.existsSync(coreDir)) {
-      ctx.ui.notify("Memory-md not initialized. Use /memory-init to set up project memory.", "info");
+      if (isFirstSession) {
+        ctx.ui.notify("Memory-md not initialized. Use /memory-init to set up project memory.", "info");
+      }
       return;
     }
 
@@ -386,6 +388,14 @@ export default function memoryMdExtension(pi: ExtensionAPI) {
 
     cachedMemoryContext = buildMemoryContext(settings, ctx);
     memoryInjected = false;
+  }
+
+  pi.on("session_start", async (_event, ctx) => {
+    await initSession(ctx, true);
+  });
+
+  pi.on("session_switch", async (_event, ctx) => {
+    await initSession(ctx, false);
   });
 
   pi.on("before_agent_start", async (event, ctx) => {
