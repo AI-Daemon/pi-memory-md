@@ -50,7 +50,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "prepare": "husky",
+    "prepare": "husky || true",
     "check": "biome check --write --error-on-warnings . && tsgo --noEmit"
   }
 }
